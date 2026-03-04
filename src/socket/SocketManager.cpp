@@ -1,0 +1,69 @@
+#include <WiFi.h>
+#include "SocketManager.h"
+
+namespace SocketManager {
+    static const char *TAG = "TCP_SOCKET";
+
+    static WiFiServer *server = nullptr;
+    static WiFiClient currentClient;
+    static unsigned long lastHeartbeatMillis = 0;
+    static constexpr unsigned long HEARTBEAT_INTERVAL = 5000;
+    static bool socketRunning = false;
+    static SocketMessageCallback messageCallback = nullptr;
+
+    void init(uint16_t port) {
+        if (server) delete server;
+        server = new WiFiServer(port);
+        server->begin();
+        socketRunning = true;
+        ESP_LOGI(TAG, "TCP Server started on port %d", port);
+    }
+
+    void setMessageListener(SocketMessageCallback callback) {
+        messageCallback = callback;
+    }
+
+    void stop() {
+        if (server) {
+            server->stop();
+            delete server;
+            server = nullptr;
+        }
+        socketRunning = false;
+        ESP_LOGI(TAG, "TCP Server stopped");
+    }
+
+    void handle() {
+        if (!socketRunning || !server) return;
+
+        if (!currentClient || !currentClient.connected()) {
+            currentClient = server->accept();
+            if (currentClient) {
+                ESP_LOGI(TAG, "TCP Client connected");
+            }
+        }
+
+        if (currentClient && currentClient.connected()) {
+            if (currentClient.available()) {
+                String data = currentClient.readStringUntil('\n');
+                data.trim();
+                ESP_LOGD(TAG, "TCP Received: %s", data.c_str());
+                if (messageCallback != nullptr) {
+                    if (messageCallback(data) == true) {
+                        String response = "{\"status\":\"Success\"}";
+                        currentClient.println(response);
+                    } else {
+                        String response = "{\"status\":\"Failure\"}";
+                        currentClient.println(response);
+                    }
+                }
+            }
+
+            if (millis() - lastHeartbeatMillis > HEARTBEAT_INTERVAL) {
+                lastHeartbeatMillis = millis();
+                currentClient.println(lastHeartbeatMillis);
+                ESP_LOGV(TAG, "TCP Heartbeat sent: %lu", lastHeartbeatMillis);
+            }
+        }
+    }
+}
