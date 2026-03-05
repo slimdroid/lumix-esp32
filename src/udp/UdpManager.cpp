@@ -76,7 +76,7 @@ namespace UdpManager {
                 // Notify listener if registered
                 if (messageCallback != nullptr) {
                     udp.beginPacket(udp.remoteIP(), udp.remotePort());
-                    String request = message.substring(COMMAND_MARK.length(), message.length() - 1);
+                    String request = message.substring(COMMAND_MARK.length(), message.length());
                     if (messageCallback(request) == true) {
                         String response = "{\"status\":\"Success\"}";
                         udp.print(response);
